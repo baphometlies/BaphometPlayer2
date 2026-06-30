@@ -3,14 +3,42 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   TextInput, SafeAreaView, StatusBar, Alert, ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
-import * as MediaLibrary from 'react-native-media-library';
+import RNFS from 'react-native-fs';
 import TrackPlayer, { useActiveTrack } from 'react-native-track-player';
 import { Colors } from '../utils/colors';
 import { formatTime } from '../utils/helpers';
 import AlbumArt from '../components/AlbumArt';
 import MiniPlayer from '../components/MiniPlayer';
+
+const AUDIO_EXTENSIONS = ['.mp3', '.m4a', '.wav', '.flac', '.aac', '.ogg'];
+
+// Pastas comuns onde o Android guarda áudio
+const SEARCH_DIRS = [
+  `${RNFS.ExternalStorageDirectoryPath}/Music`,
+  `${RNFS.ExternalStorageDirectoryPath}/Download`,
+  RNFS.ExternalStorageDirectoryPath,
+];
+
+// Busca recursiva (com limite de profundidade pra não travar)
+async function scanForAudio(dir, depth = 0, maxDepth = 4, results = []) {
+  if (depth > maxDepth) return results;
+  try {
+    const items = await RNFS.readDir(dir);
+    for (const item of items) {
+      if (item.isDirectory()) {
+        await scanForAudio(item.path, depth + 1, maxDepth, results);
+      } else if (AUDIO_EXTENSIONS.some(ext => item.name.toLowerCase().endsWith(ext))) {
+        results.push(item);
+      }
+    }
+  } catch (e) {
+    // pasta sem permissão de leitura, ignora e segue
+  }
+  return results;
+}
 
 export default function HomeScreen({ navigation }) {
   const [songs, setSongs] = useState([]);
@@ -39,21 +67,24 @@ export default function HomeScreen({ navigation }) {
         return;
       }
 
-      // Busca todos os arquivos de áudio
-      const { assets } = await MediaLibrary.getAssetsAsync({
-        mediaType: MediaLibrary.MediaType.audio,
-        first: 2000,
-        sortBy: MediaLibrary.SortBy.creationTime,
-      });
+      // Busca todos os arquivos de áudio nas pastas comuns
+      let allFiles = [];
+      for (const dir of SEARCH_DIRS) {
+        const found = await scanForAudio(dir);
+        allFiles = allFiles.concat(found);
+      }
 
-      const mapped = assets.map(a => ({
-        id: a.id,
-        url: a.uri,              // URI local — react-native-track-player suporta
-        title: a.filename.replace(/\.[^.]+$/, '').replace(/_/g, ' '),
-        artist: a.albumId || 'Artista desconhecido',
-        album: a.albumId || 'Álbum desconhecido',
-        duration: a.duration,
-        artwork: undefined,     // MediaLibrary não retorna capa; pode expandir com getAssetInfoAsync
+      // Remove duplicados (mesmo caminho)
+      const unique = Array.from(new Map(allFiles.map(f => [f.path, f])).values());
+
+      const mapped = unique.map(a => ({
+        id: a.path,
+        url: `file://${a.path}`,  // URI local — react-native-track-player suporta
+        title: a.name.replace(/\.[^.]+$/, '').replace(/_/g, ' '),
+        artist: 'Artista desconhecido',
+        album: 'Álbum desconhecido',
+        duration: 0,
+        artwork: undefined,
         genre: 'Áudio',
       }));
 
