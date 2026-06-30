@@ -3,53 +3,73 @@ name: Build APK - BAPHOMET Player
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # permite rodar manualmente pelo botão no GitHub
+  workflow_dispatch:
 
 jobs:
   build-android:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Baixa o código do repositório
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          path: source
 
-      # 2. Configura Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
 
-      # 3. Instala as dependências do projeto
-      - name: Instalar dependências
-        run: npm install
-
-      # 4. Configura Java (necessário para compilar Android)
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # 5. Configura o Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # 6. Dá permissão de execução ao Gradle
+      - name: Criar projeto base React Native
+        run: npx react-native@0.73.6 init BaphometPlayer --version 0.73.6 --skip-install
+
+      - name: Copiar arquivos do BAPHOMET para o projeto
+        run: |
+          cp source/App.js BaphometPlayer/App.js
+          cp source/index.js BaphometPlayer/index.js
+          cp source/app.json BaphometPlayer/app.json
+          rm -rf BaphometPlayer/src
+          cp -r source/src BaphometPlayer/src
+          node -e "
+            const fs = require('fs');
+            const base = JSON.parse(fs.readFileSync('BaphometPlayer/package.json'));
+            const custom = JSON.parse(fs.readFileSync('source/package.json'));
+            base.dependencies = { ...base.dependencies, ...custom.dependencies };
+            base.devDependencies = { ...base.devDependencies, ...custom.devDependencies };
+            fs.writeFileSync('BaphometPlayer/package.json', JSON.stringify(base, null, 2));
+          "
+
+      - name: Instalar dependências
+        working-directory: BaphometPlayer
+        run: npm install --legacy-peer-deps
+
+      - name: Adicionar permissões no AndroidManifest
+        working-directory: BaphometPlayer
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i 's|<application|<uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />\n\n    <application|' "$MANIFEST"
+          cat "$MANIFEST"
+
       - name: Permissão Gradle
+        working-directory: BaphometPlayer
         run: chmod +x android/gradlew
 
-      # 7. Compila o APK
       - name: Build APK
-        run: |
-          cd android
-          ./gradlew assembleRelease --no-daemon
+        working-directory: BaphometPlayer/android
+        run: ./gradlew assembleRelease --no-daemon
 
-      # 8. Disponibiliza o APK para download
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: BAPHOMET-Player.apk
-          path: android/app/build/outputs/apk/release/app-release.apk
+          path: BaphometPlayer/android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
