@@ -1,37 +1,29 @@
 name: Build APK - BAPHOMET Player
-
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
-
 jobs:
   build-android:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           path: source
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-
       - name: Criar projeto base React Native
         run: npx react-native@0.73.6 init BaphometPlayer --version 0.73.6 --skip-install
-
       - name: Copiar arquivos do BAPHOMET para o projeto
         run: |
           cp source/App.js BaphometPlayer/App.js
@@ -47,22 +39,19 @@ jobs:
             base.devDependencies = { ...base.devDependencies, ...custom.devDependencies };
             fs.writeFileSync('BaphometPlayer/package.json', JSON.stringify(base, null, 2));
           "
-
       - name: Instalar dependências
         working-directory: BaphometPlayer
         run: npm install --legacy-peer-deps
-
       - name: Adicionar permissões no AndroidManifest
         working-directory: BaphometPlayer
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i 's|<application|<uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />\n\n    <application|' "$MANIFEST"
           cat "$MANIFEST"
-
       - name: Permissão Gradle
         working-directory: BaphometPlayer
         run: chmod +x android/gradlew
-- name: Atualizar AGP, NDK e compileSdk para suporte a 16KB
+      - name: Atualizar AGP, NDK e compileSdk para suporte a 16KB
         working-directory: BaphometPlayer
         run: |
           sed -i 's/classpath("com.android.tools.build:gradle:[^"]*")/classpath("com.android.tools.build:gradle:8.6.0")/' android/build.gradle
@@ -81,4 +70,3 @@ jobs:
           name: BAPHOMET-Player.apk
           path: BaphometPlayer/android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
-          
