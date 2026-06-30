@@ -1,0 +1,55 @@
+name: Build APK - BAPHOMET Player
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # permite rodar manualmente pelo botão no GitHub
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Baixa o código do repositório
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Configura Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      # 3. Instala as dependências do projeto
+      - name: Instalar dependências
+        run: npm install
+
+      # 4. Configura Java (necessário para compilar Android)
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # 5. Configura o Android SDK
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # 6. Dá permissão de execução ao Gradle
+      - name: Permissão Gradle
+        run: chmod +x android/gradlew
+
+      # 7. Compila o APK
+      - name: Build APK
+        run: |
+          cd android
+          ./gradlew assembleRelease --no-daemon
+
+      # 8. Disponibiliza o APK para download
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: BAPHOMET-Player.apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 30
