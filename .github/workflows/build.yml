@@ -62,7 +62,6 @@ jobs:
       - name: Permissão Gradle
         working-directory: BaphometPlayer
         run: chmod +x android/gradlew
-
 - name: Atualizar AGP, NDK e compileSdk para suporte a 16KB
         working-directory: BaphometPlayer
         run: |
@@ -76,10 +75,10 @@ jobs:
       - name: Build APK
         working-directory: BaphometPlayer/android
         run: ./gradlew assembleRelease --no-daemon
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: BAPHOMET-Player.apk
           path: BaphometPlayer/android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
+          
